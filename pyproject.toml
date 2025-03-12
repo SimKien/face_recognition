@@ -1,0 +1,3 @@
+[[tool.mypy.overrides]]
+module = ["face_recognition.*"]
+follow_untyped_imports = true
