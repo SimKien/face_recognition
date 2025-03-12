@@ -8,7 +8,7 @@ __pycache__/
 
 
 # saved users
-known_users/*
+known_users/*.png
 
 
 # Distribution / packaging
