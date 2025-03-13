@@ -1,5 +1,5 @@
 import cv2 as cv
-import face_recognition
+from deepface import DeepFace
 
 name = input("Enter your name: ")
 
@@ -12,19 +12,23 @@ while True:
 
     input = cv.waitKey(1)
     if input & 0xFF == ord("s"):
-        face_locations = face_recognition.face_locations(frame)
+        faces = DeepFace.extract_faces(frame, enforce_detection=False)
 
-        if len(face_locations) == 0:
-            print("No face detected!")
+        if len(faces) == 0:
+            print("No face detected")
             continue
-        elif len(face_locations) > 1:
-            print("Multiple faces detected!")
+        elif len(faces) > 1:
+            print("More than one face detected")
             continue
-        frame = frame[
-            face_locations[0][0] : face_locations[0][2],
-            face_locations[0][3] : face_locations[0][1],
-        ]
-        cv.imwrite(f"known_users/{name}.png", frame)
+
+        x, y, w, h = (
+            faces[0]["facial_area"]["x"],
+            faces[0]["facial_area"]["y"],
+            faces[0]["facial_area"]["w"],
+            faces[0]["facial_area"]["h"],
+        )
+        face = frame[y : y + h, x : x + w]
+        cv.imwrite(f"known_users/{name}.jpg", face)
         break
 
     if input & 0xFF == ord("q"):

@@ -1,93 +1,81 @@
 import os
 import cv2 as cv
-import numpy as np
-import face_recognition
+from deepface import DeepFace
 
-PROCESS_EVERY_NTH_FRAME = 10
+RECOGNIZE_EVERY_N_FRAMES = 5
 
 KNOWN_USERS_DIRECTORY = "known_users"
 
-known_face_encodings = []
-known_face_names = []
+folder = os.path.abspath(KNOWN_USERS_DIRECTORY)
 
-filenames = os.listdir(KNOWN_USERS_DIRECTORY)
-filenames = [filename for filename in filenames if filename.endswith(".png")]
+cap = cv.VideoCapture(0)
 
-if len(filenames) == 0:
-    print("No known users found in 'known_users' directory.")
-    exit(1)
+counter = 0
+process_detection = True
 
-for filename in filenames:
-    image = face_recognition.load_image_file(f"{KNOWN_USERS_DIRECTORY}/{filename}")
-    encoding = face_recognition.face_encodings(image)[0]
-    known_face_encodings.append(encoding)
-    known_face_names.append(os.path.splitext(filename)[0])
-
-video_capture = cv.VideoCapture(0)
-
-face_locations = []
+face_locations: list[tuple[int, int, int, int]] = []
 face_names: list[str] = []
-last_processed = 0
-process_this_frame = True
 
 while True:
-    ret, frame = video_capture.read()
+    ret, frame = cap.read()
 
-    if process_this_frame:
-        current_face_encodings = []
+    if process_detection:
+        small_frame = cv.resize(frame, (0, 0), fx=0.5, fy=0.5)
+
+        face_locations.clear()
         face_names.clear()
 
-        small_frame = cv.resize(frame, (0, 0), fx=0.25, fy=0.25)
+        faces = DeepFace.extract_faces(small_frame, enforce_detection=False)
 
-        rgb_small_frame = small_frame[:, :, ::-1]
-        rgb_small_frame = rgb_small_frame.astype(np.uint8)
+        for face in faces:
+            face_pic = face["face"]
+            area = face["facial_area"]
+            x, y, w, h = area["x"], area["y"], area["w"], area["h"]
+            x = x * 2
+            y = y * 2
+            w = w * 2
+            h = h * 2
+            face_locations.append((x, y, x + w, y + h))
 
-        face_locations = face_recognition.face_locations(rgb_small_frame)
-        current_face_encodings = face_recognition.face_encodings(
-            rgb_small_frame, face_locations
-        )
-
-        for face_encoding in current_face_encodings:
-            matches = face_recognition.compare_faces(
-                known_face_encodings, face_encoding
+            result = DeepFace.find(
+                face_pic,
+                db_path=folder,
+                model_name="VGG-Face",
+                distance_metric="cosine",
+                enforce_detection=False,
+                silent=True,
             )
-            name = "Unknown"
 
-            face_distances = face_recognition.face_distance(
-                known_face_encodings, face_encoding
-            )
-            best_match_index = np.argmin(face_distances)
-            if matches[best_match_index]:
-                name = known_face_names[best_match_index]
+            if len(result) == 0:
+                face_names.append("Unknown")
+                continue
+            if result[0].empty:
+                face_names.append("Unknown")
+                continue
 
+            path = result[0]["identity"].values[0]
+            name = os.path.basename(path)
+            name = os.path.splitext(name)[0]
             face_names.append(name)
 
-    for (top, right, bottom, left), name in zip(face_locations, face_names):
-        top *= 4
-        right *= 4
-        bottom *= 4
-        left *= 4
-
+    for name, (left, top, right, bottom) in zip(face_names, face_locations):
         cv.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
-
-        cv.rectangle(
-            frame, (left, bottom - 35), (right, bottom), (0, 255, 0), cv.FILLED
+        cv.putText(
+            frame, name, (left, top - 10), cv.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2
         )
 
-        font = cv.FONT_HERSHEY_DUPLEX
-        cv.putText(frame, name, (left + 6, bottom - 6), font, 1.0, (255, 255, 255), 1)
+    cv.imshow("Detect user", frame)
 
-    cv.imshow("Detection", frame)
+    counter += 1
+    if counter == RECOGNIZE_EVERY_N_FRAMES:
+        counter = 0
+        process_detection = True
+    else:
+        process_detection = False
 
-    # only process every nth frame
-    last_processed += 1
-    if last_processed >= PROCESS_EVERY_NTH_FRAME:
-        last_processed = 0
-    process_this_frame = last_processed == 0
-
-    # if the `q` key is pressed, break from the loop
-    if cv.waitKey(1) & 0xFF == ord("q"):
+    input = cv.waitKey(1)
+    if input & 0xFF == ord("q"):
         break
 
-video_capture.release()
+cap.release()
 cv.destroyAllWindows()

@@ -1,6 +1,6 @@
 # face_recognition
 
-This repo contains a simple face recognition in the video provided by an input camera.
+This repo contains a simple face recognition in the video provided by an input camera. It works with python3.12 because there is no newer tensorflow-version.
 
 New users can be added with the script generate_user_images.py. This uses a camera (the main camera of the current system) and by pressing the button "s" the current frame is used to identify a face and save this face to the known users.
 
